@@ -507,6 +507,29 @@
   @media (max-width: 700px) {
     .bottom-grid { grid-template-columns: 1fr; }
     .ticker-grid { grid-template-columns: repeat(2, 1fr); }
+    body { font-size: 14px; }
+    header { padding: 12px 16px; }
+    .logo { font-size: 22px; letter-spacing: 2px; }
+    .logo span { font-size: 10px; }
+    .main { padding: 14px 12px; gap: 16px; padding-bottom: 90px; }
+    .ticker-card { padding: 12px 14px; }
+    .card-price { font-size: 28px; }
+    .card-change { font-size: 13px; }
+    .card-symbol { font-size: 13px; }
+    .card-name { font-size: 11px; }
+    .card-updated { font-size: 10px; }
+    .section-label { font-size: 10px; letter-spacing: 2px; }
+    .fg-value { font-size: 52px; }
+    .fg-text { font-size: 13px; }
+    .news-headline { font-size: 13px; line-height: 1.5; }
+    .news-meta { font-size: 10px; }
+    .status-bar { flex-wrap: wrap; gap: 4px 14px; padding: 8px 14px; }
+    .status-item { font-size: 10px; }
+    .status-item:last-child { display: none; }
+    .tape-item { font-size: 12px; }
+    .modal { padding: 20px 16px; }
+    .header-right { gap: 10px; }
+    .clock { font-size: 10px; }
   }
 </style>
 </head>
@@ -736,56 +759,73 @@ async function fetchCrypto() {
 }
 
 // ============================================================
-// FETCH STOCKS via Yahoo Finance proxy (allorigins)
+// FETCH STOCKS — multi-source with fallbacks
 // ============================================================
 async function fetchYahoo(symbols) {
-  const joined = symbols.join(',');
-  const url = `https://query1.finance.yahoo.com/v8/finance/spark?symbols=${joined}&range=1d&interval=5m`;
-  const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-  try {
-    const res = await fetch(proxy);
-    const outer = await res.json();
-    const data = JSON.parse(outer.contents);
-    if (!data.spark?.result) return;
-    for (const item of data.spark.result) {
-      const sym = item.symbol;
-      const closes = item.response?.[0]?.indicators?.quote?.[0]?.close?.filter(v => v != null);
-      if (!closes || closes.length === 0) continue;
-      const price = closes[closes.length - 1];
-      const open = closes[0];
-      const changeAmt = price - open;
-      const changePct = (changeAmt / open) * 100;
-      let name = sym;
-      if (sym === 'SPY') name = 'S&P 500 ETF';
-      else if (sym === '^VIX') name = 'Volatility Index';
-      else if (sym === 'USO') name = 'Oil ETF (USO)';
-      const displaySym = sym === '^VIX' ? 'VIX' : sym === 'USO' ? 'OIL' : sym;
-      updateCard(displaySym, price, changePct, name);
-    }
-  } catch(e) {
-    console.error('Yahoo fetch error:', e);
-    // Fallback: try v6 quote
-    await fetchYahooQuote(symbols);
+  // Try each symbol individually via multiple proxy approaches
+  for (const sym of symbols) {
+    await fetchSingleStock(sym);
   }
 }
 
-async function fetchYahooQuote(symbols) {
-  for (const sym of symbols) {
-    try {
-      const url = `https://query1.finance.yahoo.com/v6/finance/quote?symbols=${sym}`;
-      const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-      const res = await fetch(proxy);
-      const outer = await res.json();
-      const data = JSON.parse(outer.contents);
-      const q = data.quoteResponse?.result?.[0];
-      if (!q) continue;
-      const price = q.regularMarketPrice;
-      const changePct = q.regularMarketChangePercent;
-      const displaySym = sym === '^VIX' ? 'VIX' : sym === 'USO' ? 'OIL' : sym;
-      const name = q.shortName || q.longName || displaySym;
+async function fetchSingleStock(sym) {
+  const displaySym = sym === '^VIX' ? 'VIX' : sym === 'USO' ? 'OIL' : sym;
+  const nameMap = { SPY: 'S&P 500 ETF', '^VIX': 'Volatility Index', USO: 'Oil ETF (USO)' };
+  const name = nameMap[sym] || sym;
+
+  // Method 1: Stooq (no auth needed, reliable)
+  const stooqSym = sym === '^VIX' ? '%5EVIX' : sym;
+  try {
+    const url = `https://stooq.com/q/l/?s=${stooqSym.toLowerCase()}&f=sd2t2ohlcv&h&e=json`;
+    const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+    const res = await fetch(proxy, { signal: AbortSignal.timeout(8000) });
+    const outer = await res.json();
+    const data = JSON.parse(outer.contents);
+    const q = data?.symbols?.[0];
+    if (q && q.close && q.close !== 'N/D') {
+      const price = parseFloat(q.close);
+      const open = parseFloat(q.open);
+      const changePct = open ? ((price - open) / open) * 100 : 0;
       updateCard(displaySym, price, changePct, name);
-    } catch(e) { console.error('Yahoo quote fallback error:', e); }
-  }
+      return;
+    }
+  } catch(e) { console.warn('Stooq failed for', sym); }
+
+  // Method 2: Yahoo Finance v7 via corsproxy.io
+  try {
+    const url = `https://query2.finance.yahoo.com/v7/finance/quote?symbols=${sym}`;
+    const proxy = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+    const res = await fetch(proxy, { signal: AbortSignal.timeout(8000) });
+    const data = await res.json();
+    const q = data?.quoteResponse?.result?.[0];
+    if (q?.regularMarketPrice) {
+      updateCard(displaySym, q.regularMarketPrice, q.regularMarketChangePercent || 0, q.shortName || name);
+      return;
+    }
+  } catch(e) { console.warn('Yahoo v7 failed for', sym); }
+
+  // Method 3: allorigins Yahoo fallback
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=2d`;
+    const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+    const res = await fetch(proxy, { signal: AbortSignal.timeout(8000) });
+    const outer = await res.json();
+    const data = JSON.parse(outer.contents);
+    const meta = data?.chart?.result?.[0]?.meta;
+    if (meta?.regularMarketPrice) {
+      const price = meta.regularMarketPrice;
+      const prevClose = meta.previousClose || meta.chartPreviousClose || price;
+      const changePct = ((price - prevClose) / prevClose) * 100;
+      updateCard(displaySym, price, changePct, meta.shortName || name);
+      return;
+    }
+  } catch(e) { console.warn('Yahoo chart fallback failed for', sym); }
+
+  console.error('All sources failed for', sym);
+}
+
+async function fetchYahooQuote(symbols) {
+  for (const sym of symbols) await fetchSingleStock(sym);
 }
 
 // ============================================================
