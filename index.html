@@ -7,19 +7,19 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Bebas+Neue&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #080c10;
-    --surface: #0d1117;
-    --surface2: #131920;
-    --border: #1e2a35;
-    --green: #00e5a0;
-    --red: #ff3e5e;
-    --yellow: #f5c842;
-    --blue: #3ab7ff;
-    --orange: #ff7a28;
-    --muted: #4a6070;
-    --text: #c8d8e4;
-    --bright: #eaf4ff;
-    --accent: #00e5a0;
+    --bg: #f0f4f8;
+    --surface: #ffffff;
+    --surface2: #e8eef4;
+    --border: #cdd8e3;
+    --green: #007a4d;
+    --red: #c0293b;
+    --yellow: #9a6c00;
+    --blue: #1565b8;
+    --orange: #b85000;
+    --muted: #6b7f90;
+    --text: #1e2f3d;
+    --bright: #0a1929;
+    --accent: #0055bb;
   }
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -36,7 +36,7 @@
     content: '';
     position: fixed;
     inset: 0;
-    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,229,160,0.012) 2px, rgba(0,229,160,0.012) 4px);
+    background: none;
     pointer-events: none;
     z-index: 9999;
   }
@@ -58,7 +58,7 @@
     font-size: 28px;
     letter-spacing: 4px;
     color: var(--accent);
-    text-shadow: 0 0 20px rgba(0,229,160,0.4);
+    text-shadow: none;
   }
   .logo span { color: var(--muted); font-size: 13px; font-family: 'Space Mono', monospace; letter-spacing: 2px; margin-left: 10px; vertical-align: middle; }
   .header-right {
@@ -79,7 +79,7 @@
     width: 7px; height: 7px;
     border-radius: 50%;
     background: var(--green);
-    box-shadow: 0 0 8px var(--green);
+    box-shadow: none;
     animation: pulse 1.5s ease-in-out infinite;
   }
   @keyframes pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.5; transform:scale(0.7); } }
@@ -104,8 +104,8 @@
 
   /* Alert bar */
   #alert-bar {
-    background: rgba(245,200,66,0.08);
-    border-bottom: 1px solid rgba(245,200,66,0.2);
+    background: rgba(180,130,0,0.1);
+    border-bottom: 1px solid rgba(180,130,0,0.3);
     padding: 8px 24px;
     display: none;
     align-items: center;
@@ -142,7 +142,7 @@
   .ticker-card {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,0.08);
     padding: 14px 16px;
     position: relative;
     overflow: hidden;
@@ -208,7 +208,7 @@
     animation: flash-update 0.6s ease-out;
   }
   @keyframes flash-update {
-    0% { background: rgba(0,229,160,0.15); }
+    0% { background: rgba(0,120,80,0.1); }
     100% { background: var(--surface); }
   }
 
@@ -260,7 +260,7 @@
   .fg-panel {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,0.08);
     padding: 18px;
   }
   .fg-gauge {
@@ -298,7 +298,7 @@
   .news-panel {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,0.08);
     padding: 18px;
     display: flex;
     flex-direction: column;
@@ -334,8 +334,8 @@
     letter-spacing: 1px;
   }
   .news-sentiment.bullish { background: rgba(0,229,160,0.15); color: var(--green); }
-  .news-sentiment.bearish { background: rgba(255,62,94,0.15); color: var(--red); }
-  .news-sentiment.neutral { background: rgba(74,96,112,0.2); color: var(--muted); }
+  .news-sentiment.bearish { background: rgba(192,41,59,0.1); color: var(--red); }
+  .news-sentiment.neutral { background: rgba(107,127,144,0.15); color: var(--muted); }
 
   /* Alert Modal */
   .modal-overlay {
@@ -416,7 +416,7 @@
   .active-alerts-panel {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,0.08);
     padding: 18px;
   }
   .alert-rule-item {
@@ -647,15 +647,15 @@
             </linearGradient>
           </defs>
           <!-- Background arc -->
-          <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#1e2a35" stroke-width="12" stroke-linecap="round"/>
+          <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#dde5ec" stroke-width="12" stroke-linecap="round"/>
           <!-- Colored arc -->
           <path id="fg-arc-path" d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="url(#arcGrad)" stroke-width="12" stroke-linecap="round" stroke-dasharray="251" stroke-dashoffset="251"/>
           <!-- Needle -->
-          <line id="fg-needle" x1="100" y1="100" x2="100" y2="28" stroke="white" stroke-width="2" stroke-linecap="round" transform="rotate(0, 100, 100)" opacity="0.9"/>
-          <circle cx="100" cy="100" r="5" fill="white" opacity="0.9"/>
+          <line id="fg-needle" x1="100" y1="100" x2="100" y2="28" stroke="#1e2f3d" stroke-width="2" stroke-linecap="round" transform="rotate(0, 100, 100)" opacity="0.9"/>
+          <circle cx="100" cy="100" r="5" fill="#1e2f3d" opacity="0.9"/>
           <!-- Labels -->
-          <text x="16" y="118" fill="#ff3e5e" font-size="8" font-family="Space Mono">FEAR</text>
-          <text x="155" y="118" fill="#00e5a0" font-size="8" font-family="Space Mono">GREED</text>
+          <text x="16" y="118" fill="#c0293b" font-size="8" font-family="Space Mono">FEAR</text>
+          <text x="155" y="118" fill="#007a4d" font-size="8" font-family="Space Mono">GREED</text>
         </svg>
       </div>
       <div class="fg-label-group">
