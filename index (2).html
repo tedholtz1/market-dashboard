@@ -1,0 +1,1184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SIGNAL — Market Intelligence</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Bebas+Neue&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080c10;
+    --surface: #0d1117;
+    --surface2: #131920;
+    --border: #1e2a35;
+    --green: #00e5a0;
+    --red: #ff3e5e;
+    --yellow: #f5c842;
+    --blue: #3ab7ff;
+    --orange: #ff7a28;
+    --muted: #4a6070;
+    --text: #c8d8e4;
+    --bright: #eaf4ff;
+    --accent: #00e5a0;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,229,160,0.012) 2px, rgba(0,229,160,0.012) 4px);
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* Header */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 28px;
+    letter-spacing: 4px;
+    color: var(--accent);
+    text-shadow: 0 0 20px rgba(0,229,160,0.4);
+  }
+  .logo span { color: var(--muted); font-size: 13px; font-family: 'Space Mono', monospace; letter-spacing: 2px; margin-left: 10px; vertical-align: middle; }
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .live-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--green);
+    letter-spacing: 1px;
+  }
+  .live-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.5; transform:scale(0.7); } }
+  .clock {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .refresh-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 5px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    transition: all 0.2s;
+  }
+  .refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Alert bar */
+  #alert-bar {
+    background: rgba(245,200,66,0.08);
+    border-bottom: 1px solid rgba(245,200,66,0.2);
+    padding: 8px 24px;
+    display: none;
+    align-items: center;
+    gap: 10px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--yellow);
+  }
+  #alert-bar.visible { display: flex; }
+  #alert-list { flex: 1; }
+  .close-alerts {
+    background: none; border: none; color: var(--yellow); cursor: pointer; font-size: 16px; padding: 0 4px;
+  }
+
+  /* Main layout */
+  .main { padding: 20px 24px; display: flex; flex-direction: column; gap: 20px; }
+
+  /* Section labels */
+  .section-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 3px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  /* Ticker grid */
+  .ticker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+  }
+  .ticker-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.2s, transform 0.15s;
+  }
+  .ticker-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .ticker-card.alert-set { border-color: rgba(245,200,66,0.4); }
+  .ticker-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--card-color, var(--accent));
+    opacity: 0.6;
+  }
+  .card-symbol {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--card-color, var(--accent));
+    letter-spacing: 1px;
+  }
+  .card-name {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .card-price {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 26px;
+    color: var(--bright);
+    margin-top: 8px;
+    letter-spacing: 1px;
+    line-height: 1;
+  }
+  .card-change {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    margin-top: 4px;
+  }
+  .card-change.up { color: var(--green); }
+  .card-change.down { color: var(--red); }
+  .card-change.neutral { color: var(--muted); }
+  .card-updated {
+    font-size: 9px;
+    color: var(--muted);
+    margin-top: 6px;
+    font-family: 'Space Mono', monospace;
+  }
+  .card-alert-icon {
+    position: absolute;
+    top: 10px; right: 10px;
+    font-size: 12px;
+    opacity: 0.5;
+    cursor: pointer;
+  }
+  .card-alert-icon:hover { opacity: 1; }
+  .card-flash {
+    animation: flash-update 0.6s ease-out;
+  }
+  @keyframes flash-update {
+    0% { background: rgba(0,229,160,0.15); }
+    100% { background: var(--surface); }
+  }
+
+  /* Custom ticker input */
+  .custom-ticker-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-top: 10px;
+  }
+  .custom-ticker-row input {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--bright);
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    width: 120px;
+    outline: none;
+  }
+  .custom-ticker-row input:focus { border-color: var(--accent); }
+  .custom-ticker-row input::placeholder { color: var(--muted); text-transform: none; letter-spacing: 0; }
+  .add-btn {
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  .add-btn:hover { opacity: 0.85; }
+
+  /* Two-column layout for bottom sections */
+  .bottom-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+
+  /* Fear & Greed */
+  .fg-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 18px;
+  }
+  .fg-gauge {
+    position: relative;
+    width: 200px;
+    margin: 16px auto 0;
+  }
+  .fg-arc {
+    width: 100%; display: block;
+  }
+  .fg-label-group {
+    text-align: center;
+    margin-top: 8px;
+  }
+  .fg-value {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 48px;
+    line-height: 1;
+    color: var(--bright);
+  }
+  .fg-text {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    margin-top: 4px;
+  }
+  .fg-prev {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 6px;
+    font-family: 'Space Mono', monospace;
+  }
+
+  /* News Panel */
+  .news-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .news-item {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .news-item:last-child { border-bottom: none; }
+  .news-item:hover { padding-left: 6px; }
+  .news-headline {
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.4;
+    font-weight: 500;
+  }
+  .news-meta {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+    margin-top: 4px;
+    display: flex;
+    gap: 10px;
+  }
+  .news-sentiment {
+    padding: 1px 6px;
+    border-radius: 2px;
+    font-size: 9px;
+    font-family: 'Space Mono', monospace;
+    letter-spacing: 1px;
+  }
+  .news-sentiment.bullish { background: rgba(0,229,160,0.15); color: var(--green); }
+  .news-sentiment.bearish { background: rgba(255,62,94,0.15); color: var(--red); }
+  .news-sentiment.neutral { background: rgba(74,96,112,0.2); color: var(--muted); }
+
+  /* Alert Modal */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(8,12,16,0.85);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+  }
+  .modal-overlay.visible { display: flex; }
+  .modal {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    width: 360px;
+    max-width: 95vw;
+  }
+  .modal-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 20px;
+    letter-spacing: 2px;
+    color: var(--bright);
+    margin-bottom: 16px;
+  }
+  .modal-subtitle {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--accent);
+    letter-spacing: 1px;
+    margin-bottom: 16px;
+  }
+  .modal-field { margin-bottom: 14px; }
+  .modal-field label {
+    display: block;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+  }
+  .modal-field input, .modal-field select {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--bright);
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    outline: none;
+  }
+  .modal-field input:focus, .modal-field select:focus { border-color: var(--accent); }
+  .modal-field select option { background: var(--surface2); }
+  .modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 18px;
+  }
+  .modal-actions button {
+    flex: 1;
+    padding: 9px;
+    border-radius: 4px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    cursor: pointer;
+    border: none;
+  }
+  .btn-primary { background: var(--accent); color: var(--bg); }
+  .btn-secondary { background: transparent; border: 1px solid var(--border) !important; color: var(--muted); }
+
+  /* Active alerts list */
+  .active-alerts-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 18px;
+  }
+  .alert-rule-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+  }
+  .alert-rule-item:last-child { border-bottom: none; }
+  .alert-rule-sym { color: var(--accent); font-weight: 700; }
+  .alert-rule-cond { color: var(--text); }
+  .alert-rule-del { color: var(--red); cursor: pointer; font-size: 14px; opacity: 0.6; }
+  .alert-rule-del:hover { opacity: 1; }
+  .empty-state {
+    text-align: center;
+    padding: 20px;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+
+  /* Ticker tape */
+  .ticker-tape {
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    overflow: hidden;
+    height: 32px;
+    display: flex;
+    align-items: center;
+  }
+  .tape-track {
+    display: flex;
+    gap: 40px;
+    animation: scroll-tape 40s linear infinite;
+    white-space: nowrap;
+    padding: 0 20px;
+  }
+  @keyframes scroll-tape { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+  .tape-item {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    display: flex;
+    gap: 8px;
+  }
+  .tape-sym { color: var(--accent); font-weight: 700; }
+  .tape-price { color: var(--bright); }
+  .tape-chg.up { color: var(--green); }
+  .tape-chg.down { color: var(--red); }
+
+  /* Loading shimmer */
+  .shimmer {
+    background: linear-gradient(90deg, var(--surface) 25%, var(--surface2) 50%, var(--surface) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 3px;
+    color: transparent !important;
+    user-select: none;
+  }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+  /* Status bar */
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 6px 24px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 100;
+  }
+  .status-item {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+  .status-item span { color: var(--accent); }
+
+  .main { padding-bottom: 50px; }
+
+  @media (max-width: 700px) {
+    .bottom-grid { grid-template-columns: 1fr; }
+    .ticker-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <span class="logo">SIGNAL<span>// MARKET INTEL</span></span>
+  </div>
+  <div class="header-right">
+    <div class="live-badge"><div class="live-dot"></div>LIVE</div>
+    <div class="clock" id="clock">--:--:--</div>
+    <button class="refresh-btn" onclick="refreshAll()">↻ REFRESH</button>
+  </div>
+</header>
+
+<!-- Alert bar -->
+<div id="alert-bar">
+  <span>⚠</span>
+  <span id="alert-list"></span>
+  <button class="close-alerts" onclick="clearAlertBar()">✕</button>
+</div>
+
+<!-- Ticker tape -->
+<div class="ticker-tape">
+  <div class="tape-track" id="tape-track">
+    <div class="tape-item"><span class="tape-sym">BTC</span><span class="tape-price">—</span><span class="tape-chg neutral">—</span></div>
+    <div class="tape-item"><span class="tape-sym">ETH</span><span class="tape-price">—</span><span class="tape-chg neutral">—</span></div>
+    <div class="tape-item"><span class="tape-sym">SPY</span><span class="tape-price">—</span><span class="tape-chg neutral">—</span></div>
+    <div class="tape-item"><span class="tape-sym">VIX</span><span class="tape-price">—</span><span class="tape-chg neutral">—</span></div>
+    <div class="tape-item"><span class="tape-sym">OIL</span><span class="tape-price">—</span><span class="tape-chg neutral">—</span></div>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- Crypto -->
+  <div>
+    <div class="section-label">// Cryptocurrency</div>
+    <div class="ticker-grid" id="crypto-grid">
+      <div class="ticker-card" id="card-BTC" style="--card-color:#f7931a" onclick="openAlertModal('BTC','Bitcoin')">
+        <span class="card-alert-icon" title="Set alert">🔔</span>
+        <div class="card-symbol">BTC</div>
+        <div class="card-name">Bitcoin</div>
+        <div class="card-price shimmer">———</div>
+        <div class="card-change neutral shimmer">———</div>
+        <div class="card-updated">Fetching...</div>
+      </div>
+      <div class="ticker-card" id="card-ETH" style="--card-color:#627eea" onclick="openAlertModal('ETH','Ethereum')">
+        <span class="card-alert-icon" title="Set alert">🔔</span>
+        <div class="card-symbol">ETH</div>
+        <div class="card-name">Ethereum</div>
+        <div class="card-price shimmer">———</div>
+        <div class="card-change neutral shimmer">———</div>
+        <div class="card-updated">Fetching...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Market Indices -->
+  <div>
+    <div class="section-label">// Market Indices & Commodities</div>
+    <div class="ticker-grid" id="indices-grid">
+      <div class="ticker-card" id="card-SPY" style="--card-color:#3ab7ff" onclick="openAlertModal('SPY','S&P 500 ETF')">
+        <span class="card-alert-icon">🔔</span>
+        <div class="card-symbol">SPY</div>
+        <div class="card-name">S&P 500 ETF</div>
+        <div class="card-price shimmer">———</div>
+        <div class="card-change neutral shimmer">———</div>
+        <div class="card-updated">Fetching...</div>
+      </div>
+      <div class="ticker-card" id="card-VIX" style="--card-color:#ff7a28" onclick="openAlertModal('VIX','Volatility Index')">
+        <span class="card-alert-icon">🔔</span>
+        <div class="card-symbol">VIX</div>
+        <div class="card-name">Volatility Index</div>
+        <div class="card-price shimmer">———</div>
+        <div class="card-change neutral shimmer">———</div>
+        <div class="card-updated">Fetching...</div>
+      </div>
+      <div class="ticker-card" id="card-OIL" style="--card-color:#ff3e5e" onclick="openAlertModal('OIL','Crude Oil (WTI)')">
+        <span class="card-alert-icon">🔔</span>
+        <div class="card-symbol">USO</div>
+        <div class="card-name">Oil ETF (USO)</div>
+        <div class="card-price shimmer">———</div>
+        <div class="card-change neutral shimmer">———</div>
+        <div class="card-updated">Fetching...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom Tickers -->
+  <div>
+    <div class="section-label">// Custom Stock Tickers</div>
+    <div class="custom-ticker-row">
+      <input type="text" id="ticker-input" placeholder="e.g. AAPL, TSLA" maxlength="10" />
+      <button class="add-btn" onclick="addCustomTicker()">+ ADD</button>
+    </div>
+    <div class="ticker-grid" id="custom-grid" style="margin-top:12px;"></div>
+  </div>
+
+  <!-- Bottom grid: Fear/Greed + News -->
+  <div class="bottom-grid">
+    <!-- Fear & Greed -->
+    <div class="fg-panel">
+      <div class="section-label">// CNN Fear & Greed Index</div>
+      <div class="fg-gauge">
+        <svg class="fg-arc" viewBox="0 0 200 120" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="arcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#ff3e5e"/>
+              <stop offset="25%" stop-color="#ff7a28"/>
+              <stop offset="50%" stop-color="#f5c842"/>
+              <stop offset="75%" stop-color="#3ab7ff"/>
+              <stop offset="100%" stop-color="#00e5a0"/>
+            </linearGradient>
+          </defs>
+          <!-- Background arc -->
+          <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#1e2a35" stroke-width="12" stroke-linecap="round"/>
+          <!-- Colored arc -->
+          <path id="fg-arc-path" d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="url(#arcGrad)" stroke-width="12" stroke-linecap="round" stroke-dasharray="251" stroke-dashoffset="251"/>
+          <!-- Needle -->
+          <line id="fg-needle" x1="100" y1="100" x2="100" y2="28" stroke="white" stroke-width="2" stroke-linecap="round" transform="rotate(0, 100, 100)" opacity="0.9"/>
+          <circle cx="100" cy="100" r="5" fill="white" opacity="0.9"/>
+          <!-- Labels -->
+          <text x="16" y="118" fill="#ff3e5e" font-size="8" font-family="Space Mono">FEAR</text>
+          <text x="155" y="118" fill="#00e5a0" font-size="8" font-family="Space Mono">GREED</text>
+        </svg>
+      </div>
+      <div class="fg-label-group">
+        <div class="fg-value" id="fg-value">—</div>
+        <div class="fg-text" id="fg-text" style="color:var(--muted)">LOADING...</div>
+        <div class="fg-prev" id="fg-prev"></div>
+      </div>
+    </div>
+
+    <!-- News -->
+    <div class="news-panel">
+      <div class="section-label">// Market Headlines</div>
+      <div id="news-container">
+        <div class="empty-state">LOADING HEADLINES...</div>
+      </div>
+      <button class="refresh-btn" style="margin-top:12px;width:100%;text-align:center;" onclick="fetchNews()">↻ REFRESH HEADLINES</button>
+    </div>
+  </div>
+
+  <!-- Active Alerts -->
+  <div class="active-alerts-panel">
+    <div class="section-label">// Price Alerts</div>
+    <div id="alerts-list-container">
+      <div class="empty-state">NO ALERTS SET — CLICK A CARD TO SET AN ALERT</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Status bar -->
+<div class="status-bar">
+  <div class="status-item">LAST UPDATE: <span id="last-update">—</span></div>
+  <div class="status-item">NEXT REFRESH: <span id="next-refresh">—</span></div>
+  <div class="status-item">ALERTS: <span id="alert-count">0</span></div>
+  <div class="status-item" style="margin-left:auto">DATA: COINGECKO · YAHOO FINANCE PROXY · ALTERNATIVE.ME</div>
+</div>
+
+<!-- Alert Modal -->
+<div class="modal-overlay" id="alert-modal">
+  <div class="modal">
+    <div class="modal-title">SET PRICE ALERT</div>
+    <div class="modal-subtitle" id="modal-sym-label">BTC — BITCOIN</div>
+    <div class="modal-field">
+      <label>CONDITION</label>
+      <select id="alert-condition">
+        <option value="above">Price goes ABOVE</option>
+        <option value="below">Price goes BELOW</option>
+        <option value="change_up">% Change UP by</option>
+        <option value="change_down">% Change DOWN by</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <label id="alert-value-label">PRICE ($)</label>
+      <input type="number" id="alert-value" placeholder="e.g. 100000" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn-primary" onclick="saveAlert()">SAVE ALERT</button>
+      <button class="btn-secondary" onclick="closeAlertModal()">CANCEL</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+let prices = {}; // { symbol: { price, change, changePercent, name, prevPrice } }
+let alerts = []; // { id, symbol, condition, value, triggered }
+let customTickers = [];
+let refreshInterval = null;
+let refreshCountdown = 60;
+let currentModalSymbol = '';
+let currentModalName = '';
+
+// ============================================================
+// CLOCK
+// ============================================================
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent = now.toLocaleTimeString('en-US', { hour12: false });
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ============================================================
+// FETCH CRYPTO (CoinGecko free)
+// ============================================================
+async function fetchCrypto() {
+  try {
+    const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true');
+    const data = await res.json();
+    const btcPrice = data.bitcoin?.usd;
+    const btcChg = data.bitcoin?.usd_24h_change;
+    const ethPrice = data.ethereum?.usd;
+    const ethChg = data.ethereum?.usd_24h_change;
+    if (btcPrice) updateCard('BTC', btcPrice, btcChg, 'Bitcoin');
+    if (ethPrice) updateCard('ETH', ethPrice, ethChg, 'Ethereum');
+  } catch(e) {
+    console.error('Crypto fetch error:', e);
+  }
+}
+
+// ============================================================
+// FETCH STOCKS via Yahoo Finance proxy (allorigins)
+// ============================================================
+async function fetchYahoo(symbols) {
+  const joined = symbols.join(',');
+  const url = `https://query1.finance.yahoo.com/v8/finance/spark?symbols=${joined}&range=1d&interval=5m`;
+  const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+  try {
+    const res = await fetch(proxy);
+    const outer = await res.json();
+    const data = JSON.parse(outer.contents);
+    if (!data.spark?.result) return;
+    for (const item of data.spark.result) {
+      const sym = item.symbol;
+      const closes = item.response?.[0]?.indicators?.quote?.[0]?.close?.filter(v => v != null);
+      if (!closes || closes.length === 0) continue;
+      const price = closes[closes.length - 1];
+      const open = closes[0];
+      const changeAmt = price - open;
+      const changePct = (changeAmt / open) * 100;
+      let name = sym;
+      if (sym === 'SPY') name = 'S&P 500 ETF';
+      else if (sym === '^VIX') name = 'Volatility Index';
+      else if (sym === 'USO') name = 'Oil ETF (USO)';
+      const displaySym = sym === '^VIX' ? 'VIX' : sym === 'USO' ? 'OIL' : sym;
+      updateCard(displaySym, price, changePct, name);
+    }
+  } catch(e) {
+    console.error('Yahoo fetch error:', e);
+    // Fallback: try v6 quote
+    await fetchYahooQuote(symbols);
+  }
+}
+
+async function fetchYahooQuote(symbols) {
+  for (const sym of symbols) {
+    try {
+      const url = `https://query1.finance.yahoo.com/v6/finance/quote?symbols=${sym}`;
+      const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+      const res = await fetch(proxy);
+      const outer = await res.json();
+      const data = JSON.parse(outer.contents);
+      const q = data.quoteResponse?.result?.[0];
+      if (!q) continue;
+      const price = q.regularMarketPrice;
+      const changePct = q.regularMarketChangePercent;
+      const displaySym = sym === '^VIX' ? 'VIX' : sym === 'USO' ? 'OIL' : sym;
+      const name = q.shortName || q.longName || displaySym;
+      updateCard(displaySym, price, changePct, name);
+    } catch(e) { console.error('Yahoo quote fallback error:', e); }
+  }
+}
+
+// ============================================================
+// FETCH FEAR & GREED
+// ============================================================
+async function fetchFearGreed() {
+  try {
+    const res = await fetch('https://api.alternative.me/fng/?limit=2');
+    const data = await res.json();
+    const latest = data.data[0];
+    const prev = data.data[1];
+    const val = parseInt(latest.value);
+    const classification = latest.value_classification;
+    updateFearGreed(val, classification, prev);
+  } catch(e) {
+    console.error('Fear & Greed fetch error:', e);
+    document.getElementById('fg-value').textContent = 'ERR';
+    document.getElementById('fg-text').textContent = 'UNAVAILABLE';
+  }
+}
+
+function updateFearGreed(value, classification, prev) {
+  document.getElementById('fg-value').textContent = value;
+  const el = document.getElementById('fg-text');
+  el.textContent = classification.toUpperCase();
+  let color = '#f5c842';
+  if (value <= 25) color = '#ff3e5e';
+  else if (value <= 45) color = '#ff7a28';
+  else if (value >= 75) color = '#00e5a0';
+  else if (value >= 55) color = '#3ab7ff';
+  el.style.color = color;
+
+  // Needle: maps 0-100 to -90 to +90 degrees
+  const angle = (value / 100) * 180 - 90;
+  document.getElementById('fg-needle').setAttribute('transform', `rotate(${angle}, 100, 100)`);
+
+  // Arc fill
+  const totalLength = 251;
+  const offset = totalLength - (value / 100) * totalLength;
+  document.getElementById('fg-arc-path').setAttribute('stroke-dashoffset', offset);
+
+  if (prev) {
+    const prevVal = parseInt(prev.value);
+    const diff = value - prevVal;
+    const sign = diff >= 0 ? '+' : '';
+    document.getElementById('fg-prev').textContent = `PREV DAY: ${prevVal} (${sign}${diff})`;
+  }
+}
+
+// ============================================================
+// FETCH NEWS via free RSS feeds (works on any host)
+// ============================================================
+const NEWS_FEEDS = [
+  { url: 'https://feeds.finance.yahoo.com/rss/2.0/headline?s=^GSPC,^VIX&region=US&lang=en-US', source: 'Yahoo Finance' },
+  { url: 'https://feeds.marketwatch.com/marketwatch/topstories/', source: 'MarketWatch' },
+  { url: 'https://www.investing.com/rss/news_25.rss', source: 'Investing.com' },
+];
+
+// Keywords for basic sentiment detection
+const BULLISH_WORDS = ['surge', 'rally', 'gain', 'rise', 'soar', 'jump', 'climb', 'beat', 'record', 'high', 'strong', 'growth', 'profit', 'bull'];
+const BEARISH_WORDS = ['drop', 'fall', 'plunge', 'crash', 'decline', 'loss', 'fear', 'risk', 'weak', 'miss', 'low', 'sell', 'bear', 'recession', 'inflation'];
+
+function detectSentiment(text) {
+  const lower = text.toLowerCase();
+  let score = 0;
+  BULLISH_WORDS.forEach(w => { if (lower.includes(w)) score++; });
+  BEARISH_WORDS.forEach(w => { if (lower.includes(w)) score--; });
+  if (score > 0) return 'bullish';
+  if (score < 0) return 'bearish';
+  return 'neutral';
+}
+
+function timeAgo(dateStr) {
+  try {
+    const diff = (Date.now() - new Date(dateStr).getTime()) / 1000 / 60;
+    if (diff < 60) return `${Math.round(diff)}m ago`;
+    if (diff < 1440) return `${Math.round(diff / 60)}h ago`;
+    return `${Math.round(diff / 1440)}d ago`;
+  } catch { return ''; }
+}
+
+async function fetchNews() {
+  const container = document.getElementById('news-container');
+  container.innerHTML = '<div class="empty-state">FETCHING HEADLINES...</div>';
+
+  const allItems = [];
+
+  for (const feed of NEWS_FEEDS) {
+    try {
+      const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(feed.url)}`;
+      const res = await fetch(proxy);
+      const outer = await res.json();
+      const parser = new DOMParser();
+      const xml = parser.parseFromString(outer.contents, 'text/xml');
+      const items = Array.from(xml.querySelectorAll('item')).slice(0, 4);
+      for (const item of items) {
+        const title = item.querySelector('title')?.textContent?.trim() || '';
+        const pubDate = item.querySelector('pubDate')?.textContent?.trim() || '';
+        if (!title || title.length < 10) continue;
+        allItems.push({
+          title,
+          source: feed.source,
+          time: timeAgo(pubDate),
+          sentiment: detectSentiment(title),
+          summary: ''
+        });
+      }
+    } catch(e) {
+      console.warn('RSS feed failed:', feed.source, e);
+    }
+    if (allItems.length >= 8) break;
+  }
+
+  if (allItems.length > 0) {
+    renderNews(allItems.slice(0, 7));
+  } else {
+    // Final fallback if all feeds fail
+    container.innerHTML = '<div class="empty-state">HEADLINES UNAVAILABLE — CHECK BACK SOON</div>';
+  }
+}
+
+function renderNews(headlines) {
+  const container = document.getElementById('news-container');
+  if (!headlines.length) {
+    container.innerHTML = '<div class="empty-state">NO HEADLINES AVAILABLE</div>';
+    return;
+  }
+  container.innerHTML = headlines.map(h => `
+    <div class="news-item">
+      <div class="news-headline">${h.title}</div>
+      <div class="news-meta">
+        <span>${h.source || 'Market News'}</span>
+        <span>${h.time || ''}</span>
+        <span class="news-sentiment ${h.sentiment}">${h.sentiment?.toUpperCase() || 'NEUTRAL'}</span>
+      </div>
+      ${h.summary ? `<div style="font-size:10px;color:var(--muted);margin-top:3px;">${h.summary}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+// ============================================================
+// UPDATE CARD
+// ============================================================
+function updateCard(symbol, price, changePercent, name) {
+  const prev = prices[symbol];
+  prices[symbol] = { price, changePercent, name, prevPrice: prev?.price };
+
+  const card = document.getElementById('card-' + symbol);
+  if (!card) return;
+
+  const priceEl = card.querySelector('.card-price');
+  const changeEl = card.querySelector('.card-change');
+  const updatedEl = card.querySelector('.card-updated');
+
+  // Remove shimmer
+  priceEl.classList.remove('shimmer');
+  changeEl.classList.remove('shimmer');
+
+  // Format price
+  let priceStr;
+  if (price >= 1000) priceStr = '$' + price.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  else if (price >= 10) priceStr = '$' + price.toFixed(2);
+  else priceStr = '$' + price.toFixed(4);
+  priceEl.textContent = priceStr;
+
+  // Change
+  const sign = changePercent >= 0 ? '+' : '';
+  changeEl.textContent = `${sign}${changePercent.toFixed(2)}%`;
+  changeEl.className = 'card-change ' + (changePercent > 0 ? 'up' : changePercent < 0 ? 'down' : 'neutral');
+
+  // Flash animation on update
+  if (prev?.price && prev.price !== price) {
+    card.classList.remove('card-flash');
+    void card.offsetWidth;
+    card.classList.add('card-flash');
+  }
+
+  updatedEl.textContent = new Date().toLocaleTimeString('en-US', { hour12: false });
+
+  // Update tape
+  updateTape();
+
+  // Check alerts
+  checkAlerts(symbol, price, changePercent);
+}
+
+// ============================================================
+// TICKER TAPE
+// ============================================================
+function updateTape() {
+  const syms = ['BTC','ETH','SPY','VIX','OIL', ...customTickers];
+  const items = syms.map(sym => {
+    const d = prices[sym];
+    if (!d) return `<div class="tape-item"><span class="tape-sym">${sym}</span><span class="tape-price">—</span></div>`;
+    const sign = d.changePercent >= 0 ? '+' : '';
+    const cls = d.changePercent >= 0 ? 'up' : 'down';
+    const pStr = d.price >= 100 ? '$' + d.price.toLocaleString('en-US',{maximumFractionDigits:2}) : '$' + d.price.toFixed(2);
+    return `<div class="tape-item"><span class="tape-sym">${sym}</span><span class="tape-price">${pStr}</span><span class="tape-chg ${cls}">${sign}${d.changePercent.toFixed(2)}%</span></div>`;
+  });
+  // Duplicate for infinite scroll
+  const doubled = [...items, ...items].join('');
+  document.getElementById('tape-track').innerHTML = doubled;
+}
+
+// ============================================================
+// CUSTOM TICKERS
+// ============================================================
+async function addCustomTicker() {
+  const input = document.getElementById('ticker-input');
+  const sym = input.value.trim().toUpperCase();
+  if (!sym || customTickers.includes(sym)) { input.value = ''; return; }
+  customTickers.push(sym);
+  input.value = '';
+
+  // Create card
+  const grid = document.getElementById('custom-grid');
+  const card = document.createElement('div');
+  card.className = 'ticker-card';
+  card.id = 'card-' + sym;
+  card.style = '--card-color:#c084fc';
+  card.onclick = () => openAlertModal(sym, sym);
+  card.innerHTML = `
+    <span class="card-alert-icon">🔔</span>
+    <div class="card-symbol">${sym}</div>
+    <div class="card-name">${sym}</div>
+    <div class="card-price shimmer">———</div>
+    <div class="card-change neutral shimmer">——</div>
+    <div class="card-updated">Fetching...</div>
+    <button onclick="event.stopPropagation();removeCustomTicker('${sym}')" style="position:absolute;bottom:8px;right:8px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;">✕</button>
+  `;
+  grid.appendChild(card);
+  await fetchYahooQuote([sym]);
+}
+
+function removeCustomTicker(sym) {
+  customTickers = customTickers.filter(s => s !== sym);
+  const card = document.getElementById('card-' + sym);
+  if (card) card.remove();
+  delete prices[sym];
+}
+
+document.getElementById('ticker-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') addCustomTicker();
+});
+
+// ============================================================
+// ALERTS
+// ============================================================
+function openAlertModal(symbol, name) {
+  currentModalSymbol = symbol;
+  currentModalName = name;
+  document.getElementById('modal-sym-label').textContent = `${symbol} — ${name.toUpperCase()}`;
+  const currentPrice = prices[symbol]?.price;
+  if (currentPrice) {
+    document.getElementById('alert-value').placeholder = `Current: ${currentPrice >= 100 ? currentPrice.toFixed(2) : currentPrice.toFixed(4)}`;
+  }
+  document.getElementById('alert-modal').classList.add('visible');
+  updateAlertValueLabel();
+}
+
+function closeAlertModal() {
+  document.getElementById('alert-modal').classList.remove('visible');
+}
+
+document.getElementById('alert-condition').addEventListener('change', updateAlertValueLabel);
+function updateAlertValueLabel() {
+  const cond = document.getElementById('alert-condition').value;
+  const label = document.getElementById('alert-value-label');
+  if (cond.startsWith('change')) {
+    label.textContent = 'PERCENTAGE (%)';
+    document.getElementById('alert-value').placeholder = 'e.g. 5';
+  } else {
+    label.textContent = 'PRICE ($)';
+  }
+}
+
+function saveAlert() {
+  const condition = document.getElementById('alert-condition').value;
+  const value = parseFloat(document.getElementById('alert-value').value);
+  if (isNaN(value) || value <= 0) {
+    alert('Please enter a valid value.');
+    return;
+  }
+  const id = Date.now();
+  alerts.push({ id, symbol: currentModalSymbol, name: currentModalName, condition, value, triggered: false });
+  closeAlertModal();
+  renderAlertsList();
+
+  // Mark card
+  const card = document.getElementById('card-' + currentModalSymbol);
+  if (card) card.classList.add('alert-set');
+}
+
+function renderAlertsList() {
+  const container = document.getElementById('alerts-list-container');
+  document.getElementById('alert-count').textContent = alerts.length;
+  if (!alerts.length) {
+    container.innerHTML = '<div class="empty-state">NO ALERTS SET — CLICK A CARD TO SET AN ALERT</div>';
+    return;
+  }
+  const condLabel = { above: '≥', below: '≤', change_up: '↑%', change_down: '↓%' };
+  container.innerHTML = alerts.map(a => `
+    <div class="alert-rule-item">
+      <span class="alert-rule-sym">${a.symbol}</span>
+      <span class="alert-rule-cond">${condLabel[a.condition] || ''} ${a.value}${a.condition.startsWith('change') ? '%' : ''}</span>
+      <span style="font-size:9px;color:var(--muted);font-family:Space Mono">${a.triggered ? '✓ TRIGGERED' : 'WATCHING'}</span>
+      <span class="alert-rule-del" onclick="removeAlert(${a.id})">✕</span>
+    </div>
+  `).join('');
+}
+
+function removeAlert(id) {
+  alerts = alerts.filter(a => a.id !== id);
+  renderAlertsList();
+}
+
+function checkAlerts(symbol, price, changePercent) {
+  const triggered = [];
+  for (const alert of alerts) {
+    if (alert.symbol !== symbol || alert.triggered) continue;
+    let fire = false;
+    if (alert.condition === 'above' && price >= alert.value) fire = true;
+    if (alert.condition === 'below' && price <= alert.value) fire = true;
+    if (alert.condition === 'change_up' && changePercent >= alert.value) fire = true;
+    if (alert.condition === 'change_down' && changePercent <= -alert.value) fire = true;
+    if (fire) {
+      alert.triggered = true;
+      triggered.push(`${symbol} alert: ${alert.condition} ${alert.value}`);
+      // Browser notification
+      if (Notification.permission === 'granted') {
+        new Notification(`SIGNAL ALERT — ${symbol}`, {
+          body: `${symbol} has triggered your alert: ${alert.condition} ${alert.value}`,
+          icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">📊</text></svg>'
+        });
+      }
+    }
+  }
+  if (triggered.length) {
+    showAlertBar(triggered);
+    renderAlertsList();
+  }
+}
+
+function showAlertBar(messages) {
+  document.getElementById('alert-list').textContent = messages.join(' | ');
+  document.getElementById('alert-bar').classList.add('visible');
+}
+
+function clearAlertBar() {
+  document.getElementById('alert-bar').classList.remove('visible');
+}
+
+// Request notification permission
+if ('Notification' in window && Notification.permission === 'default') {
+  Notification.requestPermission();
+}
+
+// ============================================================
+// REFRESH
+// ============================================================
+async function refreshAll() {
+  document.getElementById('last-update').textContent = 'REFRESHING...';
+  await Promise.all([
+    fetchCrypto(),
+    fetchYahoo(['SPY', '^VIX', 'USO', ...customTickers]),
+    fetchFearGreed(),
+  ]);
+  const now = new Date();
+  document.getElementById('last-update').textContent = now.toLocaleTimeString('en-US', { hour12: false });
+  refreshCountdown = 60;
+}
+
+function startAutoRefresh() {
+  if (refreshInterval) clearInterval(refreshInterval);
+  refreshInterval = setInterval(() => {
+    refreshCountdown--;
+    document.getElementById('next-refresh').textContent = refreshCountdown + 's';
+    if (refreshCountdown <= 0) {
+      refreshAll();
+    }
+  }, 1000);
+}
+
+// ============================================================
+// INIT
+// ============================================================
+async function init() {
+  await refreshAll();
+  fetchNews();
+  startAutoRefresh();
+}
+
+init();
+</script>
+</body>
+</html>
