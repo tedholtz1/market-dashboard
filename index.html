@@ -761,11 +761,9 @@ async function fetchCrypto() {
 // ============================================================
 // FETCH STOCKS — multi-source with fallbacks
 // ============================================================
+// Fetch all stocks in parallel for speed
 async function fetchYahoo(symbols) {
-  // Try each symbol individually via multiple proxy approaches
-  for (const sym of symbols) {
-    await fetchSingleStock(sym);
-  }
+  await Promise.allSettled(symbols.map(sym => fetchSingleStock(sym)));
 }
 
 async function fetchSingleStock(sym) {
@@ -773,59 +771,90 @@ async function fetchSingleStock(sym) {
   const nameMap = { SPY: 'S&P 500 ETF', '^VIX': 'Volatility Index', USO: 'Oil ETF (USO)' };
   const name = nameMap[sym] || sym;
 
-  // Method 1: Stooq (no auth needed, reliable)
-  const stooqSym = sym === '^VIX' ? '%5EVIX' : sym;
+  // VIX: dedicated path with correct ^ encoding
+  if (sym === '^VIX') {
+    try {
+      const url = 'https://stooq.com/q/l/?s=^vix&f=sd2t2ohlcv&h&e=json';
+      const proxy = 'https://api.allorigins.win/get?url=' + encodeURIComponent(url);
+      const res = await fetch(proxy, { signal: AbortSignal.timeout(6000) });
+      const outer = await res.json();
+      const data = JSON.parse(outer.contents);
+      const q = data?.symbols?.[0];
+      if (q && q.close && q.close !== 'N/D') {
+        const price = parseFloat(q.close);
+        const open = parseFloat(q.open);
+        updateCard('VIX', price, open ? ((price - open) / open) * 100 : 0, 'Volatility Index');
+        return;
+      }
+    } catch(e) { console.warn('Stooq VIX failed'); }
+    try {
+      const url = 'https://query2.finance.yahoo.com/v8/finance/chart/%5EVIX?interval=1d&range=2d';
+      const proxy = 'https://corsproxy.io/?' + encodeURIComponent(url);
+      const res = await fetch(proxy, { signal: AbortSignal.timeout(6000) });
+      const data = await res.json();
+      const meta = data?.chart?.result?.[0]?.meta;
+      if (meta?.regularMarketPrice) {
+        const price = meta.regularMarketPrice;
+        const prev = meta.previousClose || meta.chartPreviousClose || price;
+        updateCard('VIX', price, ((price - prev) / prev) * 100, 'Volatility Index');
+        return;
+      }
+    } catch(e) { console.warn('corsproxy VIX failed'); }
+    return;
+  }
+
+  // Method 1: Stooq for regular symbols
   try {
-    const url = `https://stooq.com/q/l/?s=${stooqSym.toLowerCase()}&f=sd2t2ohlcv&h&e=json`;
-    const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-    const res = await fetch(proxy, { signal: AbortSignal.timeout(8000) });
+    const url = 'https://stooq.com/q/l/?s=' + sym.toLowerCase() + '&f=sd2t2ohlcv&h&e=json';
+    const proxy = 'https://api.allorigins.win/get?url=' + encodeURIComponent(url);
+    const res = await fetch(proxy, { signal: AbortSignal.timeout(6000) });
     const outer = await res.json();
     const data = JSON.parse(outer.contents);
     const q = data?.symbols?.[0];
     if (q && q.close && q.close !== 'N/D') {
       const price = parseFloat(q.close);
       const open = parseFloat(q.open);
-      const changePct = open ? ((price - open) / open) * 100 : 0;
-      updateCard(displaySym, price, changePct, name);
+      updateCard(displaySym, price, open ? ((price - open) / open) * 100 : 0, name);
       return;
     }
   } catch(e) { console.warn('Stooq failed for', sym); }
 
-  // Method 2: Yahoo Finance v7 via corsproxy.io
+  // Method 2: corsproxy Yahoo
   try {
-    const url = `https://query2.finance.yahoo.com/v7/finance/quote?symbols=${sym}`;
-    const proxy = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-    const res = await fetch(proxy, { signal: AbortSignal.timeout(8000) });
+    const url = 'https://query2.finance.yahoo.com/v8/finance/chart/' + sym + '?interval=1d&range=2d';
+    const proxy = 'https://corsproxy.io/?' + encodeURIComponent(url);
+    const res = await fetch(proxy, { signal: AbortSignal.timeout(6000) });
     const data = await res.json();
-    const q = data?.quoteResponse?.result?.[0];
-    if (q?.regularMarketPrice) {
-      updateCard(displaySym, q.regularMarketPrice, q.regularMarketChangePercent || 0, q.shortName || name);
+    const meta = data?.chart?.result?.[0]?.meta;
+    if (meta?.regularMarketPrice) {
+      const price = meta.regularMarketPrice;
+      const prev = meta.previousClose || meta.chartPreviousClose || price;
+      updateCard(displaySym, price, ((price - prev) / prev) * 100, meta.shortName || name);
       return;
     }
-  } catch(e) { console.warn('Yahoo v7 failed for', sym); }
+  } catch(e) { console.warn('corsproxy failed for', sym); }
 
   // Method 3: allorigins Yahoo fallback
   try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=2d`;
-    const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-    const res = await fetch(proxy, { signal: AbortSignal.timeout(8000) });
+    const url = 'https://query1.finance.yahoo.com/v8/finance/chart/' + sym + '?interval=1d&range=2d';
+    const proxy = 'https://api.allorigins.win/get?url=' + encodeURIComponent(url);
+    const res = await fetch(proxy, { signal: AbortSignal.timeout(6000) });
     const outer = await res.json();
     const data = JSON.parse(outer.contents);
     const meta = data?.chart?.result?.[0]?.meta;
     if (meta?.regularMarketPrice) {
       const price = meta.regularMarketPrice;
-      const prevClose = meta.previousClose || meta.chartPreviousClose || price;
-      const changePct = ((price - prevClose) / prevClose) * 100;
-      updateCard(displaySym, price, changePct, meta.shortName || name);
+      const prev = meta.previousClose || meta.chartPreviousClose || price;
+      updateCard(displaySym, price, ((price - prev) / prev) * 100, meta.shortName || name);
       return;
     }
-  } catch(e) { console.warn('Yahoo chart fallback failed for', sym); }
+  } catch(e) { console.warn('allorigins failed for', sym); }
 
   console.error('All sources failed for', sym);
 }
 
 async function fetchYahooQuote(symbols) {
-  for (const sym of symbols) await fetchSingleStock(sym);
+  await Promise.allSettled(symbols.map(sym => fetchSingleStock(sym)));
 }
 
 // ============================================================
